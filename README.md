@@ -85,11 +85,12 @@ Current configuration options and defaults:
             /*  Included file patterns (relative to the current dir).
                 These are regex patterns.
                 All relative paths that match these patterns will be included.
+                By default, all files are included.
             */
             "files": [".+"],
 
             /*  Excluded file patterns (relative to the current dir).
-                These are regex pattern.
+                These are regex patterns.
                 All relative paths from included files that match these
                 patterns will be excluded.
             */
