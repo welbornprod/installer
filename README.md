@@ -17,6 +17,12 @@ files starting with '__' are used.
 
 See the configuration options and install types below for more information.
 
+This is not meant to replace other package managers such as
+[pip](https://pypi.python.org/pypi/pip), [apt](https://wiki.debian.org/Apt),
+or others. If your project has complex dependencies or build processes I would
+highly recommend making a proper package for it. This is for small projects
+with simple installation requirements.
+
 I would recommend copying this to your project directory, renaming it to
 `install`, and making it executable (`chmod +x install`).
 
