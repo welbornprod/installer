@@ -120,9 +120,8 @@ valid JSON. Any config options that are not recognized are ignored.
 Misconfiguration of known config settings will cause the installer to abort.
 
 
-In the future python dependencies may be handled automatically, or at least
-warned about. For now you or your users will have to handle them yourself,
-sorry.
+In the future, python dependencies may be handled automatically or at least
+warned about. For now you or your users will have to handle them, sorry.
 
 
 Automatic Cleanup:
