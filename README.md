@@ -43,12 +43,15 @@ Global install looks for common application directories such as
 
 When `install.py --user` is used, files are installed relative to the
 `/home/user` directory. Applications are installed in `~/.local/share`,
-`~/local/share`, and executables are install in `~/bin`, `~/.local/bin`,
+`~/local/share`, and executables are installed in `~/bin`, `~/.local/bin`,
 and `~/local/bin`.
 
 
 When looking for proper directories, the first existing directory is used.
 Installations are aborted if no proper directory can be found.
+
+Base directories can be explicitly set through configuration, which would
+override the standard directories.
 
 A warning is emitted if the chosen executable path is not found in `$PATH`.
 
