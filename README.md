@@ -7,8 +7,8 @@ for you. It's configurable by providing an `installer.json` file in the same
 directory. It features automatic cleanup on failure, and an uninstall option.
 
 When no configuration is provided the default action is to install
-the top-level files (not including directories) into the proper application
-directory.
+the top-level files into the proper application directory. Directories are not
+included by default, see the [recurse config option](#installerjson).
 
 Executable files are symlinked in the proper executable directory.
 When no configuration is provided, any file that is executable (`chmod +x`) is
@@ -66,16 +66,19 @@ Configuration is merged with the defaults, so omitting an option means the
 default is automatically used.
 
 Current configuration options and defaults:
-
 ```
 
     {
         // Default paths, files, behavior.
         "paths": {
-            // Override standard exe dirs and install_type choice.
+            /* Override standard exe dirs and install_type choice with custom
+               directory for installed executables.
+            */
             "exe_base": null,
 
-            // Override standard app dirs and install_type choice.
+            /* Override standard app dirs and install_type choice with custom
+               directory for application files.
+            */
             "install_base": null,
 
             /*  Top level directory name under the main app dir.
@@ -84,13 +87,12 @@ Current configuration options and defaults:
                 The final install directory would then be something like:
                     /usr/local/share/myapp
             */
-            "toplevel": "<Top-level from CWD>",
-
+            "toplevel": null,
             /*  Recurse the current directory when looking for included files.
-                If true, this will recursively include all sub-directories.
+                If true, this will recursively include files found in
+                sub-directories.
             */
             "recurse": false,
-
             /*  Included file patterns (relative to the current dir).
                 These are regex patterns.
                 All relative paths that match these patterns will be included.
@@ -99,7 +101,7 @@ Current configuration options and defaults:
             "files": [".+"],
 
             /*  Excluded file patterns (relative to the current dir).
-                These are regex patterns.
+                This is a list of regex patterns.
                 All relative paths from included files that match these
                 patterns will be excluded.
             */
@@ -124,13 +126,15 @@ Current configuration options and defaults:
 ```
 
 
-C-style comments are currently supported by the installer, though they are not
-valid JSON. Any config options that are not recognized are ignored.
+Basic (not nested) C-style comments are currently supported by the installer,
+though they are not valid JSON (they are simply stripped before parsing).
+Any config options that are not recognized are ignored.
 Misconfiguration of known config settings will cause the installer to abort.
 
 
 In the future, python dependencies may be handled automatically or at least
-warned about. For now you or your users will have to handle them, sorry.
+warned about. For now you or your users will have to handle them, or use one
+of the "bigger" package managers. Sorry.
 
 
 Automatic Cleanup:
@@ -160,7 +164,7 @@ This script uses **Python 3** by default, but is compatible with **Python 2**.
 You can change the shebang line (`#!/usr/bin/env python3`) to suit your needs.
 
 Installer Dependencies:
--------------
+-----------------------
 
 `install.py` currently depends on `docopt` to parse command-line options.
 You can get it by running `pip install docopt`.
