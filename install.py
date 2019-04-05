@@ -141,7 +141,7 @@ class Installer(object):
         'local/share'
     )
 
-    # Gome (/home/<user>) directories for installing executable symlinks.
+    # Home (/home/<user>) directories for installing executable symlinks.
     home_exe_dirs = (
         'bin',
         '.local/bin',
