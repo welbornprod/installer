@@ -53,7 +53,8 @@ def main(argd):
         debug=argd['--debug'],
         reporter=print,
         debug_reporter=print,
-        error_reporter=fail)
+        error_reporter=fail,
+    )
 
     if argd['uninstall'] or argd['remove']:
         # Run uninstall instead.
