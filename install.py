@@ -12,16 +12,18 @@
 
     -Christopher Welborn 09-16-2014
 """
-from __future__ import print_function
-from docopt import docopt
 import json
 import os
 import re
 import shutil
+import subprocess
 import sys
+from collections import UserList
+
+from docopt import docopt
 
 NAME = 'Python Installer'
-VERSION = '0.0.4'
+VERSION = '0.0.7'
 VERSIONSTR = '{} v. {}'.format(NAME, VERSION)
 SCRIPT = os.path.split(os.path.abspath(sys.argv[0]))[1]
 SCRIPTDIR = os.path.abspath(sys.path[0])
@@ -30,7 +32,7 @@ CWD = os.getcwd()
 USAGESTR = """{versionstr}
     Usage:
         {script} -h | -v
-        {script} [-u] [-D]
+        {script} [preinstall] [-u] [-D]
         {script} (uninstall | remove) [-D]
 
     Options:
@@ -40,6 +42,7 @@ USAGESTR = """{versionstr}
         -v,--version  : Show version.
 
     The default action is to install the application.
+    The 'preinstall' command will just run any pre-install commands.
 """.format(script=SCRIPT, versionstr=VERSIONSTR)
 
 
@@ -64,6 +67,9 @@ def main(argd):
         else:
             print('\nUnable to uninstall, sorry.')
             return 1
+    elif argd['preinstall']:
+        # Just run the pre-install commands.
+        return installer.run_commands()
 
     # Do an installation.
     if installer.install_files():
@@ -79,6 +85,110 @@ def fail(reason):
     """ Error reporter for Installer(). Prints the message and exits. """
     print('\n{}\n'.format(reason))
     sys.exit(1)
+
+
+def try_reporter(reporter):
+    """ If reporter is a callable, return it. Otherwise return a callable
+        that does nothing.
+    """
+    return reporter if (reporter and callable(reporter)) else (lambda x: None)
+
+
+class Command(UserList):
+    """ A command argument list, with helper methods to run the command.
+    """
+    def __init__(self, args=None, name=None, debug_reporter=None):
+        super().__init__(args or [])
+        self.name = name or (self[0] if self else None)
+        self.report_debug = try_reporter(debug_reporter)
+
+    def __bool__(self):
+        return bool(self.data)
+
+    def __repr__(self):
+        typename = type(self).__name__
+        return f'{typename}({self.data!r}, name={self.name!r})'
+
+    def __str__(self):
+        if self.name:
+            return f'{self.name}: {" ".join(self) or "<no command>"}'
+        return ' '.join(self) or '<no command>'
+
+    @classmethod
+    def from_dict(cls, d, use_global=False, debug_reporter=None):
+        report_debug = try_reporter(debug_reporter)
+        name = d.get('name', d.get('command', [''])[0])
+        if use_global:
+            cmd = d['command']
+            report_debug(f'Using global command: {cmd}')
+        else:
+            # Use user command if available.
+            cmd = d.get('command_user', d['command'])
+            report_debug(f'Using user command: {cmd}')
+        return cls(cmd, name=name, debug_reporter=debug_reporter)
+
+    @classmethod
+    def from_list(cls, args, debug_reporter=None):
+        try_reporter(debug_reporter)(f'Using global list: {args!r}')
+        return cls(args, debug_reporter=debug_reporter)
+
+    @classmethod
+    def from_str(cls, s, debug_reporter=None):
+        try_reporter(debug_reporter)(f'Using global str: {s!r}')
+        return cls(s.split(' '), debug_reporter=debug_reporter)
+
+    def run(self):
+        try:
+            subprocess.check_call(self)
+        except subprocess.CalledProcessError:
+            return 1
+        return 0
+
+
+class Commands(UserList):
+    """ A list of Command objects, with helper methods to run/inspect them.
+    """
+    def __init__(self, commands=None, use_global=False, debug_reporter=None):
+        super().__init__(commands or [])
+        self.report_debug = try_reporter(debug_reporter)
+        self.use_global = use_global
+        self._parse_commands()
+        self.errors = 0
+
+    def _parse_commands(self):
+        """ Ensure all command items are Command instances.
+            Convert them if needed.
+        """
+        for i, x in enumerate(self[:]):
+            if isinstance(x, Command):
+                continue
+            if isinstance(x, list):
+                # An argument list.
+                self[i] = Command.from_list(
+                    x,
+                    debug_reporter=self.report_debug,
+                )
+            elif isinstance(x, dict):
+                # A command info dict:
+                #   {'name': 'x', command': [..], 'command_user': [..]}}
+                self[i] = Command.from_dict(
+                    x,
+                    use_global=self.use_global,
+                    debug_reporter=self.report_debug,
+                )
+            elif isinstance(x, str):
+                # A command string.
+                self[i] = Command.from_str(
+                    x,
+                    debug_reporter=self.report_debug,
+                )
+
+    def run(self):
+        self.errors = 0
+        for cmd in self:
+            self.report_debug(f'Running: {cmd}')
+            self.errors += cmd.run()
+        return self.errors
 
 
 class Installer(object):
@@ -119,7 +229,9 @@ class Installer(object):
         'dependencies': {},
         # Default is user-specified from init (use_global = True/False).
         # 'global' or 'local' can be used to force a preference.
-        'install_type': None
+        'install_type': None,
+        # Extra commands to run before install.
+        'commands': Commands(),
     }
 
     # Global directories for installing applications.
@@ -313,6 +425,14 @@ class Installer(object):
                 self.report_error(errfmt.format(installdir, ex))
         # Exists, or created it, success.
         return installdir
+
+    def fix_user_arg(self, s):
+        """ Replace '{user_args}' with user arguments if needed. """
+        if self.use_global:
+            repl = ''
+        else:
+            repl = '--user'
+        return s.format(user_args=repl)
 
     def get_base_dir(self):
         """ Determine the base installation directory based on config. """
@@ -569,6 +689,23 @@ class Installer(object):
 
         for i, srcfile in enumerate(self.srcfiles):
             destfile = self.destfiles[i]
+            destdir = os.path.split(destfile)[0]
+            if not os.path.isdir(destdir):
+                if self.debug:
+                    self.report_debug(
+                        'Would\'ve created dir: {}'.format(destdir)
+                    )
+                    self.created.add(destdir)
+                else:
+                    try:
+                        os.makedirs(destdir, exist_ok=True)
+                    except OSError as ex:
+                        self.report_error(
+                            'Failed to create dir: {}\n  {}'.format(
+                                destdir,
+                                ex,
+                            )
+                        )
             if self.debug:
                 debugfmt = 'Would\'ve copied: {} -> {}'
                 self.report_debug(debugfmt.format(srcfile, destfile))
@@ -702,6 +839,8 @@ class Installer(object):
         self.destfiles = self.get_dest_files()
         # Executable files from the install dir.
         self.exes = self.get_executable_files()
+        # Pre-install commands.
+        self.cmd_errors = self.run_commands()
 
     def read_installed_files(self):
         """ Read previously installed files into a list. """
@@ -770,6 +909,17 @@ class Installer(object):
         self.clean_up(reason=msg)
         self.error_reporter(msg)
 
+    def run_commands(self):
+        commands = Commands(
+            self.config.get('commands', []),
+            use_global=self.use_global,
+            debug_reporter=self.report_debug,
+        )
+        if not commands:
+            self.report_debug('No commands to run.')
+            return 0
+        return commands.run()
+
     def set_error_reporter(self, reporter):
         """ Set the error reporter, or build an exception raiser if none is
             supplied.
@@ -837,11 +987,15 @@ class Installer(object):
         except OSError as ex:
             errfmt = '\n'.join((
                 '\nUnable to copy {} to destination: {}',
-                'Local file is available: {}'))
+                'Local file is available: {}',
+                'Error: {}',
+            ))
             errmsg = errfmt.format(
                 Installer.installed_file,
                 destfile,
-                localfile)
+                localfile,
+                ex,
+            )
             self.report(errmsg)
             return False
         # Success.
